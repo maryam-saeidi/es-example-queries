@@ -1,2 +1,2 @@
 # es-example-queries
-Some elasticsearch query examples
+Some elasticsearch example queries
