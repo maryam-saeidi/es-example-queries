@@ -1,0 +1,109 @@
+{
+  "index": "metrics-*,metricbeat-*",
+  "allow_no_indices": true,
+  "ignore_unavailable": true,
+  "body": {
+    "track_total_hits": true,
+    "query": {
+      "bool": {
+        "filter": [
+          {
+            "range": {
+              "@timestamp": {
+                "gte": "2023-02-24T12:07:43.964Z",
+                "lte": "2023-02-24T12:23:47.130Z"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "size": 0,
+    "aggs": {
+      "all": {
+        "filters": {
+          "filters": {
+            "all": {
+              "match_all": {}
+            }
+          }
+        },
+        "aggs": {
+          "currentPeriod": {
+            "filters": {
+              "filters": {
+                "all": {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "2023-02-24T12:08:47.130Z",
+                      "lte": "2023-02-24T12:23:47.130Z"
+                    }
+                  }
+                }
+              }
+            },
+            "aggs": {}
+          },
+          "shouldWarn": {
+            "bucket_script": {
+              "buckets_path": {},
+              "script": "0"
+            }
+          },
+          "shouldTrigger": {
+            "bucket_script": {
+              "buckets_path": {
+                "value": "currentPeriod['all']>_count"
+              },
+              "script": {
+                "source": "params.value > params.threshold ? 1 : 0",
+                "params": {
+                  "threshold": 1
+                }
+              }
+            }
+          },
+          "lastPeriod": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "2023-02-24T12:07:43.964Z",
+                  "lte": "2023-02-24T12:22:43.964Z"
+                }
+              }
+            }
+          },
+          "missingGroup": {
+            "bucket_script": {
+              "buckets_path": {
+                "lastPeriod": "lastPeriod>_count",
+                "currentPeriod": "currentPeriod['all']>_count"
+              },
+              "script": "params.lastPeriod > 0 && params.currentPeriod < 1 ? 1 : 0"
+            }
+          },
+          "newOrRecoveredGroup": {
+            "bucket_script": {
+              "buckets_path": {
+                "lastPeriod": "lastPeriod>_count",
+                "currentPeriod": "currentPeriod['all']>_count"
+              },
+              "script": "params.lastPeriod < 1 && params.currentPeriod > 0 ? 1 : 0"
+            }
+          },
+          "evaluation": {
+            "bucket_selector": {
+              "buckets_path": {
+                "shouldWarn": "shouldWarn",
+                "shouldTrigger": "shouldTrigger",
+                "missingGroup": "missingGroup",
+                "newOrRecoveredGroup": "newOrRecoveredGroup"
+              },
+              "script": "(params.missingGroup != null && params.missingGroup > 0) || (params.shouldWarn != null && params.shouldWarn > 0) || (params.shouldTrigger != null && params.shouldTrigger > 0) || (params.newOrRecoveredGroup != null && params.newOrRecoveredGroup > 0)"
+            }
+          }
+        }
+      }
+    }
+  }
+}
