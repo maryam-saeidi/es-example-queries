@@ -1,0 +1,148 @@
+{
+  "index": "metrics-*,metricbeat-*",
+  "allow_no_indices": true,
+  "ignore_unavailable": true,
+  "body": {
+    "track_total_hits": true,
+    "query": {
+      "bool": {
+        "filter": [
+          {
+            "range": {
+              "@timestamp": {
+                "gte": "2023-02-24T11:48:49.920Z",
+                "lte": "2023-02-24T12:04:52.900Z"
+              }
+            }
+          },
+          {
+            "exists": {
+              "field": "system.cpu.user.pct"
+            }
+          }
+        ]
+      }
+    },
+    "size": 0,
+    "aggs": {
+      "groupings": {
+        "composite": {
+          "size": 10000,
+          "sources": [
+            {
+              "groupBy0": {
+                "terms": {
+                  "field": "host.hostname"
+                }
+              }
+            }
+          ],
+          "after": {
+            "groupBy0": "Maryams-MacBook-Pro.local"
+          }
+        },
+        "aggs": {
+          "currentPeriod": {
+            "filters": {
+              "filters": {
+                "all": {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "2023-02-24T11:49:52.900Z",
+                      "lte": "2023-02-24T12:04:52.900Z"
+                    }
+                  }
+                }
+              }
+            },
+            "aggs": {
+              "aggregatedValue": {
+                "sum": {
+                  "field": "system.cpu.user.pct"
+                }
+              }
+            }
+          },
+          "shouldWarn": {
+            "bucket_script": {
+              "buckets_path": {},
+              "script": "0"
+            }
+          },
+          "shouldTrigger": {
+            "bucket_script": {
+              "buckets_path": {
+                "value": "currentPeriod['all']>aggregatedValue"
+              },
+              "script": {
+                "source": "params.value > params.threshold ? 1 : 0",
+                "params": {
+                  "threshold": 1
+                }
+              }
+            }
+          },
+          "lastPeriod": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "2023-02-24T11:48:49.920Z",
+                  "lte": "2023-02-24T12:03:49.920Z"
+                }
+              }
+            }
+          },
+          "missingGroup": {
+            "bucket_script": {
+              "buckets_path": {
+                "lastPeriod": "lastPeriod>_count",
+                "currentPeriod": "currentPeriod['all']>_count"
+              },
+              "script": "params.lastPeriod > 0 && params.currentPeriod < 1 ? 1 : 0"
+            }
+          },
+          "newOrRecoveredGroup": {
+            "bucket_script": {
+              "buckets_path": {
+                "lastPeriod": "lastPeriod>_count",
+                "currentPeriod": "currentPeriod['all']>_count"
+              },
+              "script": "params.lastPeriod < 1 && params.currentPeriod > 0 ? 1 : 0"
+            }
+          },
+          "evaluation": {
+            "bucket_selector": {
+              "buckets_path": {
+                "shouldWarn": "shouldWarn",
+                "shouldTrigger": "shouldTrigger",
+                "missingGroup": "missingGroup",
+                "newOrRecoveredGroup": "newOrRecoveredGroup"
+              },
+              "script": "(params.missingGroup != null && params.missingGroup > 0) || (params.shouldWarn != null && params.shouldWarn > 0) || (params.shouldTrigger != null && params.shouldTrigger > 0) || (params.newOrRecoveredGroup != null && params.newOrRecoveredGroup > 0)"
+            }
+          },
+          "additionalContext": {
+            "top_hits": {
+              "size": 1,
+              "_source": {
+                "includes": [
+                  "host.*",
+                  "labels.*",
+                  "tags",
+                  "cloud.*",
+                  "orchestrator.*",
+                  "container.*"
+                ],
+                "excludes": [
+                  "host.cpu.*",
+                  "host.disk.*",
+                  "host.network.*"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
